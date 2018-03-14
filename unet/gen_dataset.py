@@ -5,11 +5,43 @@ import random
 import os
 import numpy as np
 from tqdm import tqdm
+import gdal
 
 img_w = 256  
 img_h = 256  
 
-image_sets = ['1.png','2.png','3.png','4.png','5.png']
+image_sets = ['BJ_F_05.tif']
+
+def imRead(filename):
+    driver = gdal.GetDriverByName('GTiff')
+    driver.Register()
+
+    dataset = gdal.Open(fileName)
+    if dataset == None:
+        print(fileName+ "read failed")
+        return
+    im_width = dataset.RasterXSize   
+    im_height = dataset.RasterYSize   
+    im_bands = dataset.RasterCount   
+#    im_geotrans = dataset.GetGeoTransform()
+#   im_proj = dataset.GetProjection()
+
+    if im_bands == 1:
+        band = dataset.GetRasterBand(1)
+        im_data = dataset.ReadAsArray(0,0,im_width,im_height)
+        cdata = im_data.astype(np.uint8)
+        merge_img=cv2.merge([cdata])
+    elif im_bands == 3:
+        band1=dataset.GetRasterBand(1)
+        band2=dataset.GetRasterBand(2)
+        band3=dataset.GetRasterBand(3)
+
+        data1=band1.ReadAsArray(0,0,im_width,im_height).astype(np.uint8)  
+        data2=band2.ReadAsArray(0,0,im_width,im_height).astype(np.uint8)   
+        data3=band3.ReadAsArray(0,0,im_width,im_height).astype(np.uint8)   
+
+        merge_img = cv2.merge([data1,data2,data3])  #B G R
+    return merge_img
 
 def gamma_transform(img, gamma):
     gamma_table = [np.power(x / 255.0, gamma) * 255.0 for x in range(256)]
@@ -63,16 +95,16 @@ def data_augment(xb,yb):
         
     return xb,yb
 
-def creat_dataset(image_num = 50000, mode = 'original'):
+def creat_dataset(image_num = 100000, mode = 'original'):
     print('creating dataset...')
     image_each = image_num / len(image_sets)
     g_count = 0
     for i in tqdm(range(len(image_sets))):
         count = 0
-        src_img = cv2.imread('./data/src/' + image_sets[i])  # 3 channels
-        label_img = cv2.imread('./data/road_label/' + image_sets[i],cv2.IMREAD_GRAYSCALE)  # single channel
+        src_img = imRead('./data/beijing/src/' + image_sets[i])  # 3 channels
+        label_img = imRead('./data/beijing/label/' + image_sets[i],cv2.IMREAD_GRAYSCALE)  # single channel
         X_height,X_width,_ = src_img.shape
-        while count < image_each:
+        for count in tqdm(range(image_each):
             random_width = random.randint(0, X_width - img_w - 1)
             random_height = random.randint(0, X_height - img_h - 1)
             src_roi = src_img[random_height: random_height + img_h, random_width: random_width + img_w,:]
@@ -80,13 +112,13 @@ def creat_dataset(image_num = 50000, mode = 'original'):
             if mode == 'augment':
                 src_roi,label_roi = data_augment(src_roi,label_roi)
             
-            visualize = np.zeros((256,256)).astype(np.uint8)
-            visualize = label_roi *50
+           # visualize = np.zeros((256,256)).astype(np.uint8)
+           # visualize = label_roi *50
             
-            cv2.imwrite(('./unet_train/visualize/%d.png' % g_count),visualize)
+           # cv2.imwrite(('./unet_train/visualize/%d.png' % g_count),visualize)
             cv2.imwrite(('./unet_train/road/src/%d.png' % g_count),src_roi)
             cv2.imwrite(('./unet_train/road/label/%d.png' % g_count),label_roi)
-            count += 1 
+           
             g_count += 1
 
 
